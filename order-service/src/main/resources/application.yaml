@@ -1,0 +1,180 @@
+# ===================================================================
+# 1. GLOBAL BASELINE FRAMEWORK & BUSINESS PARAMETERS (Shared Across Profiles)
+# ===================================================================
+server:
+  port: ${ORDER_SERVICE_PORT:8081} # Dynamically map to the active port via the port mapping registry
+
+spring:
+  application:
+    name: order-service
+
+  threads:
+    virtual:
+      enabled: true # Enforces Virtual Threads globally for Spring WebMVC and Database operations
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format-sql: true # Beautifies regular business SQL logs for easy console debugging
+
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:host.minikube.internal}:${KAFKA_PORT:9092} # Integrates with your Windows local broker
+
+  cloud:
+    function:
+      definition: restaurantApproved;restaurantRejected
+
+    stream:            
+      bindings:
+        # Core outbox stream channel binding configuration
+        publishOrderOutboxEvents-out-0:
+          destination: order-created-topic
+
+        restaurantApproved-in-0:
+          destination: restaurant-approved-topic
+          group: order-approved-group
+          consumer:
+            max-attempts: 3
+            back-off-initial-interval: 1000
+            back-off-multiplier: 2.0 # Wait 2s, then 4s (Exponential Backoff Strategy)
+        
+        restaurantRejected-in-0:
+          destination: restaurant-rejected-topic
+          group: order-rejected-group
+          consumer:
+            max-attempts: 3
+            concurrency: 3
+            back-off-initial-interval: 1000
+            back-off-multiplier: 2.0
+
+      kafka:
+        bindings:
+          restaurantApproved-in-0:
+            consumer:
+              enable-dlq: true
+              dlq-name: restaurant-approved-topic.dlq # Explicitly routes poison payloads to a dedicated DLQ
+
+          restaurantRejected-in-0:
+            consumer:
+              enable-dlq: true
+              dlq-name: restaurant-rejected-topic.dlq
+
+        binder:
+          # CRITICAL FOR DISTRIBUTED TRACING INTEGRITY:
+          # Forces Spring Cloud Stream's binder interceptors to extract W3C traceparent 
+          # headers early in the pipeline, preventing functional consumer stream fragmentation.
+          enable-observation: true
+          transaction:
+            transaction-id-prefix: order-tx- # Enables Kafka Exactly-Once Semantics (EOS)
+          configuration:
+            enable.auto.commit: false
+            acks: all
+            enable.idempotence: true
+            transaction.timeout.ms: 15000 # Closes dead transactional states after 15 seconds
+          consumer-properties:
+            isolation.level: read_committed # Enforces reading committed messages only
+            auto.offset.reset: earliest
+            max.poll.interval.ms: 300000 # Gives virtual threads up to 5 minutes to complete batch DB mutations
+
+# ===================================================================
+# 2. ACTUATOR & TELEMETRY OBSERVABILITY
+# ===================================================================
+management:
+  endpoint:    
+    health:
+      show-details: always # Helpful for local debugging to verify database and Kafka node connections
+      probes:
+        enabled: true # Forces Spring to register /actuator/health/liveness and /actuator/health/readiness
+
+  tracing:
+    sampling:
+      probability: 1.0 # Captures 100% of telemetry traces across your distributed transaction chain
+
+  otlp:
+    metrics:      
+      export:
+        url: "http://${OTEL_COLLECTOR_HOST:otel-collector.monitoring}:4318/v1/metrics" # OTLP/HTTP target (requires explicit /v1/metrics path)
+        
+  opentelemetry:
+    tracing:
+      export:        
+        otlp:
+          endpoint: "http://${OTEL_COLLECTOR_HOST:otel-collector.monitoring}:4317" # gRPC target (no path suffix)
+          transport: grpc
+    logging:
+      export:
+        otlp:
+          endpoint: "http://${OTEL_COLLECTOR_HOST:otel-collector.monitoring}:4317" # gRPC target (no path suffix)
+          transport: grpc
+
+# ===================================================================
+# 3. DIAGNOSTIC LOGGING LEVELS
+# ===================================================================
+logging:
+  level:
+    root: INFO
+    org.hibernate.SQL: DEBUG # Captures application-specific queries (filtered cleanly via logback-spring.xml)
+    org.springframework.cloud.stream: DEBUG
+    org.springframework.cloud.function: DEBUG
+
+# ===================================================================
+# 4. CUSTOM APPLICATION BUSINESS LOGIC PROPERTIES
+# ===================================================================
+app:
+  outbox:
+    batch-size: ${OUTBOX_BATCHSIZE:10}
+    polling-delay-ms: ${OUTBOX_POLLING_DELAYMS:500}
+  telemetry:
+    tracer-name: ${APP_TRACER_NAME:saga-orchestration-mesh}
+  observability:
+    ignored:
+      paths: /actuator/health,/actuator/info
+      tasks: publishNextOrderOutboxBatch
+
+---
+# ===================================================================
+# 5. ENVIRONMENT PROFILE: DEFAULT LOCAL IN-MEMORY H2 DATABASE
+# ===================================================================
+spring:
+  config:
+    activate:
+      on-profile: default # Active if no explicit profile string is supplied on application launch
+
+  datasource:
+    # PostgreSQL compatibility mode ensures H2 parses 'FOR UPDATE SKIP LOCKED' (-2) hints smoothly
+    url: jdbc:h2:mem:order_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+
+---
+# ===================================================================
+# 6. ENVIRONMENT PROFILE: KUBERNETES DEPLOYED POSTGRESQL DB
+# ===================================================================
+spring:
+  config:
+    activate:
+      on-profile: k8sdb # Activated by executing with: -Dspring.profiles.active=k8sdb
+
+  datasource:
+    # Targets the isolated PostgreSQL schema in your Minikube cluster via the NodePort bridge
+    url: jdbc:postgresql://${DATABASE_HOST:172.20.148.189}:${DATABASE_PORT:30432}/saga_db?currentSchema=order_service_schema
+    driver-class-name: org.postgresql.Driver
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update

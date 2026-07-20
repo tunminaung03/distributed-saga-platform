@@ -1,0 +1,14 @@
+-- Modern PostgreSQL idempotent seeding with pre-compiled BCrypt hashes
+-- Plaintext testing credentials: securePassword123
+INSERT INTO USERS (USER_ID, EMAIL, PASSWORD_HASH, ACTIVE, MEMBERSHIP) 
+VALUES (1, 'developer@tunmin.dev', '$2a$10$s.LZTk6jT2rR4BEeUj7WpuzDx5QbQXZupWaeGEFPk3d4Y7OehHs0G', TRUE, 'PREMIUM') 
+ON CONFLICT (USER_ID) DO NOTHING;
+
+INSERT INTO USERS (USER_ID, EMAIL, PASSWORD_HASH, ACTIVE, MEMBERSHIP) 
+VALUES (2, 'user@tunmin.dev', '$2a$10$s.LZTk6jT2rR4BEeUj7WpuzDx5QbQXZupWaeGEFPk3d4Y7OehHs0G', TRUE, 'STANDARD') 
+ON CONFLICT (USER_ID) DO NOTHING;
+
+-- Inactive Edge Case Target
+INSERT INTO USERS (USER_ID, EMAIL, PASSWORD_HASH, ACTIVE, MEMBERSHIP) 
+VALUES (3, 'suspended@tunmin.dev', '$2a$10$s.LZTk6jT2rR4BEeUj7WpuzDx5QbQXZupWaeGEFPk3d4Y7OehHs0G', FALSE, 'STANDARD') 									
+ON CONFLICT (USER_ID) DO NOTHING;

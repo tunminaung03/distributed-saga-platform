@@ -1,0 +1,42 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: order-service-policy
+  namespace: saga-ecosystem
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: order-service
+
+  ingress:
+    - fromEndpoints:
+        - matchLabels:            
+            app.kubernetes.io/name: api-gateway-service 
+            app.kubernetes.io/part-of: saga-platform
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+
+          rules:
+            http:
+              - method: POST
+                path: "^/orders$"                
+
+  egress:
+    # PostgreSQL
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: postgres
+
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+            
+    #- toFQDNs:
+      #- matchName: host.minikube.internal # Represent kafka server which is outside k8s cluster
+
+      #toPorts:
+        #- ports:
+          #- port: "9094"

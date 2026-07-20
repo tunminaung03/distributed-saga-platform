@@ -1,0 +1,134 @@
+# ===================================================================
+# 1. RUNTIME SERVER CONFIGURATION
+# ===================================================================
+server:
+  port: ${GATEWAY_PORT:8080}
+
+# ===================================================================
+# 2. SPRING CORE FRAMEWORK SETTINGS
+# ===================================================================
+spring:
+  application:
+    name: api-gateway-service
+
+  reactor:
+    context-propagation: auto
+
+  # Enables Java 25 Virtual Threads globally for all underlying thread maps
+  threads:
+    virtual:
+      enabled: true
+
+  # --- Spring gRPC Client Configuration ---
+  # Configured to support org.springframework.grpc BOM version 1.0.3 specifications
+  grpc:
+    client:
+      channels:
+        # Match name exactly to let Spring auto-wire the UserServiceBlockingStub bean
+        userService:
+          # Target configuration address leveraging Istio Service Mesh Cluster DNS defaults
+          address: 'static://${USER_SERVICE_GRPC_HOST:user-service}:${GRPC_PORT:9090}'
+          negotiation-type: plaintext # Automatically upgraded to mTLS by Istio sidecars
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:          
+            # Route 1: Edge Authentication Endpoint Forwarder
+            - id: auth-token-route
+              uri: forward:/auth/login # Fixed: Clean routing notation pointing to local controller
+              predicates:
+                - Path=/auth/login
+                - Method=POST
+
+            # Route 2: Guarded Edge Route to Order Microservice
+            - id: order-service-route
+              uri: 'http://${ORDER_SERVICE_HOST:order-service}:${ORDER_SERVICE_PORT:8081}' # Parameterized for Minikube Pod DNS
+              predicates:
+                - Path=/orders
+                - Method=POST # Explicitly limits this gateway route to POST only
+              filters:
+                # Invokes dev.tunmin.saga.apigatewayservice.filter.JwtPerimeterGuardGatewayFilterFactory
+                - JwtPerimeterGuard
+                - RemoveRequestHeader=Cookie
+                
+                # --- ADDED: Resilience4j Circuit Breaker Filter ---
+                - name: CircuitBreaker
+                  args:
+                    name: orderServiceCircuitBreaker
+                    fallbackUri: forward:/fallback/orders
+
+# ===================================================================
+# 3. ACTUATOR & TELEMETRY OBSERVABILITY
+# ===================================================================
+management:
+  # --EXPOSE AND ACTIVATE HEALTH PROBES-- #
+  endpoints:
+    web:
+      exposure:
+        include:
+        - health
+  
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+  # Sampling belongs directly under management.tracing in Spring Boot 4
+  tracing:
+    sampling:
+      probability: 1.0
+      
+  # Metrics exporter configuration
+  otlp:
+    metrics:
+      export:
+        url: "http://${OTEL_COLLECTOR_HOST:otel-collector.monitoring}:4318/v1/metrics"
+        
+  # OpenTelemetry trace and log endpoints
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: "http://${OTEL_COLLECTOR_HOST:otel-collector.monitoring}:4317"
+          transport: grpc          
+    logging:
+      export:
+        otlp:
+          endpoint: "http://${OTEL_COLLECTOR_HOST:otel-collector.monitoring}:4317"
+          transport: grpc          
+
+# ===================================================================
+# 4. DIAGNOSTIC LOGGING LEVELS
+# ===================================================================
+logging:
+  level:
+    root: INFO
+  include-application-name: true
+
+# ===================================================================
+# 5. RESILIENCE4J LOCAL APPLICATION BULKHEADS
+# ===================================================================
+resilience4j:
+  circuitbreaker:
+    instances:
+      orderServiceCircuitBreaker:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10              # Tracks last 10 requests to evaluate health
+        failureRateThreshold: 50           # Trips circuit if 50% or more requests fail
+        waitDurationInOpenState: 15000ms   # Wait 15 seconds in OPEN state before trying again (HALF-OPEN)
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
+# ===================================================================
+# 6. CUSTOM APPLICATION BUSINESS LOGIC PROPERTIES
+# ===================================================================
+app:
+  jwt:
+    secret: ${JWT_SECRET:d1303506942c7801d01a484919889d7a05921d66896a8938e4ffe40ecf35f34e}
+    issuer: ${JWT_ISSUER:saga-ecosystem-auth}
+  observability:
+    ignored:
+      paths: /actuator/health,/actuator/info

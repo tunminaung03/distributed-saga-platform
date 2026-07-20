@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: saga-ecosystem
+  labels:
+    app: user-service
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: saga-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+        app.kubernetes.io/name: user-service
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: saga-platform
+        topology.cilium.io/monitored: "true"
+    spec:
+      containers:
+        - name: user-service
+          image: dev.tunmin.saga/user-service:1.0.0-rc1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9090
+              name: grpc-port
+            - containerPort: 8084
+              name: http-web
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "k8sdb"
+
+            - name: USER_SERVICE_GRPC_HOST
+              value: "0.0.0.0"
+
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres-db:5432/saga_db?currentSchema=user_service_schema"
+
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: perimeter-security-spec
+                  key: DATABASE_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: perimeter-security-spec
+                  key: DATABASE_PASSWORD
+          envFrom:
+            - configMapRef:
+                name: cluster-config
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http-web
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http-web
+            initialDelaySeconds: 35
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "400Mi"
+            limits:
+              cpu: "750m"
+              memory: "600Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: saga-ecosystem
+  labels:
+    app: user-service
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: saga-platform
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9090
+      targetPort: grpc-port
+      name: grpc
+    - port: 8084
+      targetPort: http-web
+      name: http
+  selector:
+    app: user-service

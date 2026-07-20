@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  namespace: monitoring
+  labels:
+    app: loki
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/component: logging
+    app.kubernetes.io/part-of: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+        app.kubernetes.io/name: loki
+        app.kubernetes.io/component: logging
+        app.kubernetes.io/part-of: monitoring
+
+    spec:
+      containers:
+        - name: loki
+          image: grafana/loki:3.7.2
+          args: ["-config.file=/etc/loki/loki-config.yaml"]
+          ports:
+            - containerPort: 3100
+              name: http
+            - containerPort: 9096
+              name: grpc
+          volumeMounts:
+            - name: loki-config-vol
+              mountPath: /etc/loki
+      volumes:
+        - name: loki-config-vol
+          configMap:
+            name: loki-config # FIX: Now references specific ConfigMap
+            items:
+              - key: loki-config.yaml
+                path: loki-config.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: monitoring
+  labels:
+    app: loki
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/component: logging
+    app.kubernetes.io/part-of: monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3100
+      targetPort: 3100
+      name: http
+    - port: 9096
+      targetPort: 9096
+      name: grpc
+  selector:
+    app: loki

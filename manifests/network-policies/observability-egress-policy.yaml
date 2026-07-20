@@ -1,0 +1,30 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: observability-egress-policy
+  namespace: saga-ecosystem
+
+spec:
+  endpointSelector:  
+    matchLabels:
+      app.kubernetes.io/part-of: saga-platform
+      
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          - gateway
+          - backend
+
+  egress:    
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: otel-collector
+            k8s:io.kubernetes.pod.namespace: monitoring
+
+      toPorts:
+        - ports:
+            - port: "4317"  # for tracing and logging via OTLP/gRPC
+              protocol: TCP
+            - port: "4318"  # for metric via OTLP/HTTP
+              protocol: TCP

@@ -1,0 +1,30 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: user-service-policy
+  namespace: saga-ecosystem
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: user-service
+
+  ingress:
+    - fromEndpoints:
+        - matchLabels:            
+            app.kubernetes.io/name: api-gateway-service
+            app.kubernetes.io/part-of: saga-platform
+      toPorts:
+        - ports:
+            - port: "9090" # grpc service
+              protocol: TCP
+
+  egress:
+    # PostgreSQL
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: postgres
+
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP

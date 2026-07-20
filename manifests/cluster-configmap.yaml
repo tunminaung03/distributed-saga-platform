@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-config
+  namespace: saga-ecosystem
+data:
+  # --- Central CoreDNS Internal Networking Targets ---
+  ORDER_SERVICE_HOST: "order-service"
+  USER_SERVICE_GRPC_HOST: "user-service"
+  OTEL_COLLECTOR_HOST: "otel-collector.monitoring"
+  DATABASE_HOST: "postgres-db"
+  
+  # --- Redirection to Windows Local Host Kafka ---
+  # Replaces the cluster-internal broker handle with the virtual host network bridge
+  KAFKA_SERVERS: "host.minikube.internal"
+  KAFKA_PORT: "9094"
+  
+  # --- Network Port Map Registry ---
+  GATEWAY_PORT: "8080"
+  ORDER_SERVICE_PORT: "8081"
+  PAYMENT_SERVICE_PORT: "8082"
+  RESTAURANT_SERVICE_PORT: "8083"
+  USER_SERVICE_PORT: "8084"
+  GRPC_PORT: "9090"
+  DATABASE_PORT: "5432"
+  
+  # --- Shared Constants ---
+  JWT_ISSUER: "saga-ecosystem-auth"
+  JWT_EXPIRATION_MS: "3600000"
+  OUTBOX_BATCHSIZE: "10"
+  OUTBOX_POLLING_DELAY_MS: "500"
+  APP_TRACER_NAME: "saga-orchestration-mesh"

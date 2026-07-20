@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway-service
+  namespace: saga-ecosystem
+  labels:
+    app: api-gateway-service
+    app.kubernetes.io/name: api-gateway-service
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: saga-platform
+spec:
+  replicas: 1 
+  selector:
+    matchLabels:
+      app: api-gateway-service
+  template:
+    metadata:
+      labels:
+        app: api-gateway-service
+        app.kubernetes.io/name: api-gateway-service
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/part-of: saga-platform
+        # Explicit metadata tags for Cilium eBPF mesh monitoring
+        topology.cilium.io/monitored: "true"
+    spec:
+      containers:
+        - name: api-gateway-service
+          image: dev.tunmin.saga/api-gateway-service:1.0.0-rc1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http-ingress
+          envFrom:
+            - configMapRef:
+                name: cluster-config
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http-ingress
+            initialDelaySeconds: 30 
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http-ingress
+            initialDelaySeconds: 35 
+            periodSeconds: 5
+          resources:
+            # TUNED SIZING: Netty reactive gateways need lower memory requests but room to handle traffic spikes
+            requests:
+              cpu: "250m"
+              memory: "350Mi"
+            limits:
+              cpu: "750m"
+              memory: "550Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway-service
+  namespace: saga-ecosystem
+  labels:
+    app: api-gateway-service
+    app.kubernetes.io/name: api-gateway-service
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: saga-platform
+spec:
+  type: NodePort # Allows seamless outside traffic connection to your cluster perimeter
+  ports:
+    - port: 8080
+      targetPort: http-ingress
+      nodePort: 30080 # Stable port mapping to hit via Postman/Browser
+      name: http
+  selector:
+    app: api-gateway-service

@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-script
+  namespace: saga-ecosystem
+data:
+  init.sql: |
+    -- Create 4 isolated database runtime context blocks matching module definitions
+    CREATE SCHEMA IF NOT EXISTS order_service_schema;
+    CREATE SCHEMA IF NOT EXISTS payment_service_schema;
+    CREATE SCHEMA IF NOT EXISTS restaurant_service_schema;
+    CREATE SCHEMA IF NOT EXISTS user_service_schema;
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-db
+  namespace: saga-ecosystem
+  labels:
+    app: postgres-db
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: saga-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-db
+  template:
+    metadata:
+      labels:
+        app: postgres-db
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: saga-platform
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: "saga_db"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: perimeter-security-spec
+                  key: DATABASE_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: perimeter-security-spec
+                  key: DATABASE_PASSWORD
+          volumeMounts:
+            - name: init-volume
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init-volume
+          configMap:
+            name: postgres-init-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-db
+  namespace: saga-ecosystem
+  labels:
+    app: postgres-db
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: saga-platform
+spec:
+  type: NodePort # NodePort allows your Windows IDE to easily reach the DB over a local Minikube port
+  ports:
+    - port: 5432
+      targetPort: 5432
+      nodePort: 30432 # Hardcoded port to make local IDE application configuration stable
+      name: tcp-db
+  selector:
+    app: postgres-db

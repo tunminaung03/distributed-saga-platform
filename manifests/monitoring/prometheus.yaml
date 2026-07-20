@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/part-of: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        app.kubernetes.io/name: prometheus
+        app.kubernetes.io/component: metrics
+        app.kubernetes.io/part-of: monitoring
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.12.0
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--web.listen-address=0.0.0.0:9095"
+          ports:
+            - containerPort: 9095
+              name: web
+          volumeMounts:
+            - name: config-vol
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config-vol
+          configMap:
+            name: prometheus-config # FIX: Now references specific ConfigMap
+            items:
+              - key: prometheus.yml
+                path: prometheus.yml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: metrics
+    app.kubernetes.io/part-of: monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9095
+      targetPort: 9095
+      name: web
+  selector:
+    app: prometheus

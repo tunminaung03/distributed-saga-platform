@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+  namespace: monitoring
+  labels:
+    app: tempo
+    app.kubernetes.io/name: tempo
+    app.kubernetes.io/component: tracing
+    app.kubernetes.io/part-of: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tempo
+  template:
+    metadata:
+      labels:
+        app: tempo
+        app.kubernetes.io/name: tempo
+        app.kubernetes.io/component: tracing
+        app.kubernetes.io/part-of: monitoring
+    spec:
+      containers:
+        - name: tempo
+          image: grafana/tempo:3.0.2
+          args: ["-config.file=/etc/tempo/tempo-config.yaml"]
+          ports:
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 3200
+              name: http
+          volumeMounts:
+            - name: tempo-config-vol
+              mountPath: /etc/tempo
+      volumes:
+        - name: tempo-config-vol
+          configMap:
+            name: tempo-config # FIX: Now references specific ConfigMap
+            items:
+              - key: tempo-config.yaml
+                path: tempo-config.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: monitoring
+  labels:
+    app: tempo
+    app.kubernetes.io/name: tempo
+    app.kubernetes.io/component: tracing
+    app.kubernetes.io/part-of: monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4317
+      targetPort: 4317
+      name: otlp-grpc
+    - port: 3200
+      targetPort: 3200
+      name: http
+  selector:
+    app: tempo

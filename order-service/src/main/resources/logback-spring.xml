@@ -1,0 +1,31 @@
+<!DOCTYPE xml>
+<configuration>
+    
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    
+        <!-- The filter allow the comman separated words to be execluded -->
+        <filter class="dev.tunmin.saga.orderservice.config.logging.MessageContainsFilter">
+        	<keywords>outbox_record</keywords>
+    	</filter>
+    	
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{traceId:-}, %X{spanId:-}] [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Apply the identical filter to your OTel appender to prevent Loki flooding -->
+    <appender name="OTEL" class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
+        
+        <filter class="dev.tunmin.saga.orderservice.config.logging.MessageContainsFilter">
+        	<keywords>outbox_record</keywords>
+    	</filter>
+    	
+        <captureExperimentalAttributes>true</captureExperimentalAttributes>
+        <captureCodeAttributes>true</captureCodeAttributes>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="OTEL" />
+    </root>
+</configuration>

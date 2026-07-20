@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: saga-ecosystem
+  # -----------------------------------------------------------------------------------
+  # OPTIONAL HUBBLE TOPOLOGY TRACKING CONFIGURATION:
+  # -----------------------------------------------------------------------------------
+  # labels:
+  #   topology.cilium.io/monitored: "true"
+  #
+  # 💡 WHAT IT DOES: 
+  # Enforces eBPF kernel-level network mapping inside this namespace bubble. 
+  # It allows Cilium's Hubble UI engine to draw a live visual graph of your microservice 
+  # communication chains (e.g., api-gateway-service -> user-service -> postgres-db).
+  #
+  # ⚠️ RESOURCE IMPACT: 
+  # Left COMMENTED OUT entirely by default to keep the cluster resource footprint minimal. 
+  # Activating this block requires deploying the Hubble UI pods (`cilium.exe hubble enable --ui`), 
+  # which consumes an additional 150MB - 200MB of RAM inside 5GB Minikube ceiling.
+  #
+  # 🔧 HOW TO ENABLE LATER:
+  # 1. Uncomment BOTH the 'labels:' and 'topology.cilium.io...' lines above.
+  # 2. Run: kubectl apply -f manifests/namespace-setup.yaml
+  # 3. Run: cilium.exe hubble enable --ui
+  # 4. Launch the dashboard: cilium.exe hubble ui
+  # -----------------------------------------------------------------------------------
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring 
+  # Note: The monitoring infrastructure namespace explicitly leaves tracking off 
+  # to prevent an infinite telemetry feedback loop inside the collector pipeline.

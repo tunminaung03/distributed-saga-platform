@@ -1,0 +1,43 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: api-gateway-service-policy
+  namespace: saga-ecosystem
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway-service
+
+  ingress:
+    - fromEndpoints:
+        - {}
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+
+          rules:
+            http:
+              - method: POST
+                path: "^/orders$"
+              - method: POST
+                path: "^/auth/login$"
+  egress:
+    # order-service http
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: order-service
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+    
+    # user-service grpc
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: user-service
+      toPorts:
+        - ports:
+            - port: "9090" # grpc service`
+              protocol: TCP
+        

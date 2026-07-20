@@ -1,0 +1,49 @@
+# ===================================================================
+# LOCAL OPERATIONAL BINARIES & WORKSTATION UTILITIES
+# ===================================================================
+/cilium.exe
+*.exe
+*.dll
+
+# Global batch file block
+*.bat
+
+# EXPLICIT INCLUSION OVERRIDE: Whitelist only the Kubernetes bridge script
+!/start-infra-bridge-k8s.bat
+
+# Ignore the entire .github directory and everything inside it
+.github/
+
+# ===================================================================
+# MAVEN BUILD ARTIFACTS & COMPILATION TARGETS
+# ===================================================================
+**/target/
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# ===================================================================
+# SYSTEM ENVIRONMENT CREDENTIALS & SENSITIVE SECRETS
+# ===================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.secret
+
+# ===================================================================
+# WORKSTATION IDE WORKSPACES & DATA CACHES
+# ===================================================================
+.idea/
+.vscode/
+*.swp
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.user
+.history/
