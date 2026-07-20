@@ -19,6 +19,10 @@
 # ===================================================================
 target/
 .settings/
+**/.settings/
+**/.project
+**/.factorypath
+**/.classpath
 .project
 *.jar
 *.war
