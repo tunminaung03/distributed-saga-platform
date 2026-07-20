@@ -64,6 +64,25 @@ The `order-service` acts as the brain and core transactional coordinator for the
 ```
 ---
 
+## ⚙️ Service-Specific Environment Profiles
+
+This service adheres to the global ecosystem profiles (`default` / `k8sdb`) with the following localized database behaviors:
+
+### 1. Default Profile (`default`)
+* **Target Layer**: Local, in-memory volatile H2 database infrastructure.
+* **Launch Flag**: Automatically active if no environment variable mappings are provided.
+
+### 2. Kubernetes Pod Profile (`k8sdb`)
+* **Target Layer**: Centralized, persistent `postgres:18-alpine` node inside the cluster framework.
+* **Segregation Vector**: Dynamically locks read/write scopes to its dedicated service schema via:
+  ```properties
+  # NOTE: Replace 'order_service_schema' with 'payment_service_schema', etc. per service
+  spring.datasource.url=jdbc:postgresql://postgres-db:5432/saga_db?currentSchema=order_service_schema
+  ```
+* **Activation Command**: Force using the java system property argument: `-Dspring.profiles.active=k8sdb`.
+
+---
+
 ## ⚙️ Multi-Stage Saga State Machine Resolution
 
 The service acts as an event-driven orchestrator across twin entry channels. It uses an internal `OrderConsumerConfig` class to intercept inbound messages and mount them onto an active OpenTelemetry `CONSUMER` span before calling the transaction layers.

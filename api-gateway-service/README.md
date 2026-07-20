@@ -81,6 +81,24 @@ message AuthResponse {
 
 ---
 
+## ⚙️ Service-Specific Environment Profiles
+
+The gateway uses operational profiles to seamlessly transition routing targets between localized host environments and Kubernetes cluster networks.
+
+### 1. Default Profile (`default`)
+* **Routing Vector**: Forwards incoming traffic to microservices running locally on your workstation (`localhost`).
+
+### 2. Kubernetes Pod Profile (`k8sdb`)
+* **Routing Vector**: Leverages Kubernetes CoreDNS and Cilium Service Mesh/CNI naming conventions to route edge traffic directly to internal cluster pods via native service resolution:
+
+  ```yaml
+  uri: 'http://\({ORDER_SERVICE_HOST:order-service}:\){ORDER_SERVICE_PORT:8081}'
+  ```
+
+* **Activation Command**: Activated via the container environment variable setup inside the deployment manifests.
+
+---
+
 ### Route Entry Registry
 
 1. **Edge Authentication Route (`auth-token-route`)**

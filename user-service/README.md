@@ -103,14 +103,12 @@ VALUES (3, 'suspended@tunmin.dev', '\$2a\$10\$...', FALSE, 'STANDARD'); -- User 
 
 ---
 
-## ⚙️ Environment Execution Profiles
+## ⚙️ Service-Specific Environment Profiles
 
-The service supports twin operational profiles to manage environment transitions cleanly between host workspaces and containerized planes:
+This service adheres to the global ecosystem profiles (`default` / `k8sdb`) with the following localized database behaviors:
 
 ### 1. Default Profile (`default`)
-* **Target Layer**: Local, in-memory volatile H2 database infrastructure.
-* **Compatibility Metric**: Uses PostgreSQL parsing modes to process high-performance row locks (`FOR UPDATE SKIP LOCKED`) smoothly during simulations.
-* **Launch Flag**: Automatically active if no environment variable mappings are provided.
+... [Keep your existing text about H2 and SKIP LOCKED here] ...
 
 ### 2. Kubernetes Pod Profile (`k8sdb`)
 * **Target Layer**: Centralized, persistent `postgres:18-alpine` node inside the cluster framework.
@@ -118,7 +116,6 @@ The service supports twin operational profiles to manage environment transitions
   ```properties
   spring.datasource.url=jdbc:postgresql://postgres-db:5432/saga_db?currentSchema=user_service_schema
   ```
-* **Activation Command**: Force using the java system property argument: `-Dspring.profiles.active=k8sdb`.
 
 ---
 

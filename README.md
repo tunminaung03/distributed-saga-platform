@@ -61,6 +61,21 @@ Kafka (RestaurantApprovedEvent)  Kafka (RestaurantRejectedEvent)
 
 ---
 
+## 🌍 Ecosystem Execution Profiles
+
+The platform architecture utilizes unified runtime profiles across all microservices to manage environment transitions cleanly between local development and Kubernetes infrastructure.
+
+| Profile | Target Database Layer | Intended Deployment Mode | Activation Flag |
+| :--- | :--- | :--- | :--- |
+| `default` | Local In-Memory H2 Engine (PostgreSQL Dialect) | Fast Host Workspace Testing | Active by default |
+| `k8sdb` | Shared PostgreSQL Pod (`postgres-db:5432`) | Cluster Mesh Environment | `-Dspring.profiles.active=k8sdb` |
+
+### How to Execute Across Profiles
+* **Local Run (All Services)**: Simply run the applications without arguments. Services spin up using embedded memory databases.
+* **Kubernetes Orchestration**: The manifests inside `/manifests/apps/` automatically inject the `k8sdb` active profile via container environment variables, mapping each service to its dedicated isolated schema inside the shared PostgreSQL cluster pod.
+
+---
+
 ## 🗂️ Repository Directory Blueprint
 
 * **📂 [`/`](./README.md)**: Main infrastructure orchestration root workspace.

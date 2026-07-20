@@ -26,9 +26,9 @@ spring:
       channels:
         # Match name exactly to let Spring auto-wire the UserServiceBlockingStub bean
         userService:
-          # Target configuration address leveraging Istio Service Mesh Cluster DNS defaults
+          # Target configuration address leveraging Kubernetes DNS for Minikube Pod discovery
           address: 'static://${USER_SERVICE_GRPC_HOST:user-service}:${GRPC_PORT:9090}'
-          negotiation-type: plaintext # Automatically upgraded to mTLS by Istio sidecars
+          negotiation-type: plaintext # Automatically disables TLS for local development and testing
 
   cloud:
     gateway:

@@ -63,6 +63,25 @@ The `restaurant-service` governs the menu catalog, product availability checks, 
 
 ---
 
+## ⚙️ Service-Specific Environment Profiles
+
+This service adheres to the global ecosystem profiles (`default` / `k8sdb`) with the following localized database behaviors:
+
+### 1. Default Profile (`default`)
+* **Target Layer**: Local, in-memory volatile H2 database infrastructure.
+* **Launch Flag**: Automatically active if no environment variable mappings are provided.
+
+### 2. Kubernetes Pod Profile (`k8sdb`)
+* **Target Layer**: Centralized, persistent `postgres:18-alpine` node inside the cluster framework.
+* **Segregation Vector**: Dynamically locks read/write scopes to its dedicated service schema via:
+  ```properties
+  # NOTE: Replace 'order_service_schema' with 'payment_service_schema', etc. per service
+  spring.datasource.url=jdbc:postgresql://postgres-db:5432/saga_db?currentSchema=restaurant_service_schema
+  ```
+* **Activation Command**: Force using the java system property argument: `-Dspring.profiles.active=k8sdb`.
+
+---
+
 ## ⚙️ Advanced Persistence & Concurrency Control
 
 The engine prevents system lockups when multiple application instances query the outbox simultaneously by configuring high-performance query boundaries:

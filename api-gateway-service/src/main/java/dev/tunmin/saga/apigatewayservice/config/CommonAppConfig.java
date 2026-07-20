@@ -16,7 +16,7 @@ public class CommonAppConfig {
      * Auto-wires the core UserService gRPC binary communication pipeline stub.
      * 
      * @param channelFactory Spring gRPC's factory resolver
-     * @return A thread-safe blocking stub pointing to user-service via Istio Cluster DNS
+     * @return A thread-safe blocking stub pointing to user-service via Service Mesh or direct gRPC channel, depending on your configuration.
      */
     @Bean
     UserServiceBlockingStub userServiceStub(GrpcChannelFactory channelFactory) {
