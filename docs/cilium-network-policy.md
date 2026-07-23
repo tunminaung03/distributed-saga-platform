@@ -1,12 +1,56 @@
-# 🔒 Least-Privilege Cilium Network Policy Manual
+# 🔒 Cilium Networking & Least-Privilege Network Policy Manual
 
 This document details the eBPF kernel-level security rules, network boundaries, and Layer 7 visibility layers that sandbox traffic inside the `sample-microservice-saga` project platform.
 
 ---
 
-## 🛡️ 1. Security Architecture & Segmented Topology
+## ⚙️ 1. Cilium Runtime Architecture
 
-By default, applying any `CiliumNetworkPolicy` to a workspace transitions Cilium into a strict **Default-Deny** security posture. Traffic is completely blocked across the cluster unless explicitly permitted by an applied policy whitelist rule. 
+This platform uses Cilium as the Kubernetes CNI, providing eBPF-based networking, identity-aware security policies, and service load balancing.
+
+Key enabled capabilities:
+
+- eBPF datapath
+- Cilium identity-based security model
+- kube-proxy replacement
+- eBPF service load balancing
+- Cilium Envoy for L7 policy enforcement
+- Hubble network observability
+
+### Verify Cilium Runtime
+
+```bash
+kubectl -n kube-system exec -it ds/cilium -- cilium-dbg status
+```
+
+Expected:
+
+```
+KubeProxyReplacement: True
+Socket LB: Enabled
+Socket LB Coverage: Full
+```
+
+Traffic flow:
+
+```text
+Application
+    |
+    v
+Cilium eBPF Socket LB
+    |
+    v
+Kubernetes Service abstraction
+    |
+    v
+Backend Pod
+```
+
+---
+
+## 🛡️ 2. Security Architecture & Segmented Topology
+
+By applying a `CiliumNetworkPolicy` to selected endpoints, Cilium enables policy enforcement for those workloads. For those endpoints, traffic is denied by default unless explicitly allowed by an applicable ingress or egress rule. 
 
 The ecosystem isolates operational domains into separate functional files under the `manifests/network-policies/` subdirectory to achieve highly targeted permission sweeps:
 
@@ -21,7 +65,7 @@ manifests/network-policies/
 
 ---
 
-## 🛠️ 2. Core Operational & Shared Policies
+## 🛠️ 3. Core Operational & Shared Policies
 
 ### Policy A: Cluster-Wide Health Probes (`common-health-probes.yaml`)
 To prevent automated Kubernetes liveness and readiness probe traffic from traveling unvetted across your system, this policy restricts ingress checks exclusively to the underlying workstation Kubelet host. It uses a fine-grained Layer 7 HTTP regular expression filter to drop any payloads that stray outside the health endpoints.
@@ -95,29 +139,112 @@ spec:
               protocol: TCP
 ```
 
+### Policy C: DNS Resolution Control (`common-dns-egress-policy.yaml`)
+
+All workloads require DNS resolution through the Kubernetes DNS service. 
+This policy allows DNS traffic only to the cluster DNS service instead of permitting unrestricted UDP/TCP port 53 egress.
+
+Current implementation:
+
+```yaml
+egress:
+  - toServices:
+      - k8sService:
+          namespace: kube-system
+          serviceName: kube-dns
+    toPorts:
+      - ports:
+          - port: "53"
+            protocol: UDP
+          - port: "53"
+            protocol: TCP
+```
+> The policy targets the Kubernetes DNS service abstraction instead of CoreDNS pod endpoints. This avoids coupling DNS access rules to individual CoreDNS pod identities.
+
 ---
 
-## ⚡ 3. Microservice Specific Isolation Policies
+## ⚡ 4. Microservice Specific Isolation Policies
 
-### Policy C: Perimeter Edge Proxy Rules (`api-gateway-service-policy.yaml`)
+### Policy D: Perimeter Edge Proxy Rules (`api-gateway-service-policy.yaml`)
 The `api-gateway-service` acts as the cluster boundary matching `component: gateway`. It is permitted to receive inbound public requests on port `8080`, but it can only route egress traffic downstream to the specific business components that match its routing tables.
 
 *   **Ingress Path Constraints**: Restricts incoming REST payloads strictly to the matching string regex rules `^/orders$` (POST) and `^/auth/login$` (POST).
 *   **Targeted Egress Locks**: Whitelists outbound connections exclusively to port `8081` (`order-service` HTTP REST) and port `9090` (`user-service` high-performance binary gRPC).
 
-### Policy D: Transaction State Machine Separation (`order-service-policy.yaml`)
+### Policy E: Transaction State Machine Separation (`order-service-policy.yaml`)
 Protects the core orchestrator component. It explicitly flags and blocks any incoming request that does not originate directly from an endpoint carrying the identity label `app.kubernetes.io/name: api-gateway-service`. 
 
 *   **Persistence Egress**: Whitelists outbound connections on port `5432` to the `postgres` database label, ensuring that the orchestrator can mutate data inside its designated `order_service_schema` while remaining completely isolated from unauthorized network scopes.
-*   **Kafka Stream Egress (Testing Notice)**: The egress rules targeting external host-side Kafka brokers via port `9094` remain currently commented out or decoupled inside tracking configurations until explicit FQDN cache behaviors are verified via live event testing loops.
+*   **Kafka Stream Egress**: Kafka connectivity has been verified through Cilium flow observation. Current enforcement is L3/L4 TCP port-based (`9094`). Kafka-aware L7 policies are not currently implemented.
 
-### Policy E: Identity Profile Isolation (`user-service-policy.yaml`)
+### Policy F: Identity Profile Isolation (`user-service-policy.yaml`)
 Secures your authorization provider engine. It allows inbound connection handshakes over high-performance binary gRPC streams via port `9090` strictly when initiated by the `api-gateway-service` perimeter proxy, while whitelisting outbound database connectivity exclusively to your localized PostgreSQL node on port `5432`.
 
 ---
 
-## 🟢 4. Sidecarless eBPF Layer 7 Visibility Benefits
+## 🔭 5. Hubble Network Observability
 
-Unlike legacy service meshes that inject memory-heavy sidecar proxy containers (like Envoy) into every single pod namespace—which would crash our tight **5.5GB cluster limit**—Cilium operates transparently right inside the Linux host kernel space.
+Hubble is Cilium's observability layer and provides real-time network flow visibility from the eBPF datapath.
 
-By declaring the explicit metadata annotation `topology.cilium.io/monitored: "true"` inside your service manifests, you instruct Cilium to dynamically hook its kernel filters to your container sockets. This compiles L7 monitoring rules natively, load-balances binary gRPC streams over port `9090` cleanly, and feeds data to your metrics engines without inflating your cluster's RAM footprint.
+Enable:
+
+```bash
+cilium hubble enable --ui
+```
+> Run from a machine where the Cilium CLI is installed and connected to the Kubernetes cluster.
+
+Verify components:
+```bash
+kubectl -n kube-system get pods | findstr hubble
+```
+
+Observe live flows:
+```bash
+kubectl -n kube-system exec -it ds/cilium -- hubble observe --follow --from-pod saga-ecosystem/api-gateway-service-xxxxx
+```
+
+Example verified application flow:
+```bash
+api-gateway-service -> user-service:9090
+api-gateway-service -> order-service:8081
+```
+
+---
+
+## 🟢 6. Sidecarless eBPF Layer 7 Visibility Benefits
+
+Cilium provides Layer 7 visibility by applying L7-aware network policies. Selected traffic is transparently redirected through Cilium Envoy for protocol-aware inspection and enforcement.
+
+Unlike traditional service meshes that require sidecar proxy injection into every workload, Cilium provides networking and security capabilities directly through the eBPF datapath, reducing operational and memory overhead in resource-constrained environments.
+
+---
+
+## 🧪 7. Policy Verification
+
+Network policies are verified using application tests and Hubble flow inspection.
+
+### Allowed Traffic
+
+Example:
+
+```text
+api-gateway-service
+        |
+        | gRPC :9090
+        v
+user-service
+```
+
+Verify:
+```bash
+kubectl -n kube-system exec -it ds/cilium -- hubble observe --follow --from-pod saga-ecosystem/api-gateway-service-xxxxx
+```
+
+Expected:
+```text
+api-gateway-service <> user-service:9090 TRACED (TCP)
+```
+
+The TRACED verdict confirms that Cilium observed the traffic through the eBPF datapath. A successful allowed connection will also show a FORWARDED verdict.
+
+> Additional verification can be performed by testing unauthorized connections and confirming `DROPPED` verdicts in Hubble.

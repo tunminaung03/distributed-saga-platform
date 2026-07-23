@@ -109,7 +109,7 @@ For advanced runbooks, structural designs, and triage blueprints, consult the sp
 
 1. 🚀 **[Local Minikube Cluster Provisioning & Setup Guide](./docs/local-minikube-setup.md)**
 2. 📐 **[Distributed Saga Component Architecture Spec](./docs/architecture.md)**
-3. 🔒 **[Least-Privilege Cilium Network Policy Manual](./docs/cilium-network-policy.md)**
+3. 🔒 **[Cilium Networking & Least-Privilege Network Policy Manual](./docs/cilium-network-policy.md)**
 4. 📊 **[Observability Ops & Grafana Triage Manual](./docs/observability.md)**
 5. 🧯 **[Windows Hypervisor Environment Troubleshooting Guide](./docs/troubleshooting.md)**
 
